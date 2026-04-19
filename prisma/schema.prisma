@@ -1,0 +1,326 @@
+// AI-Powered Issue Tracking and Code Governance Monitor
+// Production-ready SaaS schema for agent-accessible data
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================================
+// User & Authentication Models
+// ============================================================================
+
+model User {
+  id                    String      @id @default(cuid())
+  email                 String      @unique
+  name                  String?
+  hashedPassword        String?
+  
+  // Subscription & Billing
+  subscriptionTier      SubscriptionTier @default(FREE)
+  lemonSqueezyCustomerId String?
+  lemonSqueezyOrderId   String?
+  subscriptionStatus    SubscriptionStatus @default(INACTIVE)
+  subscriptionEndsAt    DateTime?
+  
+  // Metadata
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  lastLoginAt           DateTime?
+  
+  // Relations
+  apiKeys               ApiKey[]
+  projects              Project[]
+  activities            Activity[]
+  
+  @@index([email])
+  @@index([subscriptionTier])
+}
+
+enum SubscriptionTier {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  INACTIVE
+  ACTIVE
+  CANCELLED
+  EXPIRED
+}
+
+model ApiKey {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Security: store hashed keys, not plain text
+  hashedKey             String      @unique
+  keyPrefix             String      @unique // First 8 chars for display
+  
+  name                  String      @default("API Key")
+  rateLimit             Int         @default(1000) // requests per hour
+  
+  isActive              Boolean     @default(true)
+  lastUsedAt            DateTime?
+  
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  
+  @@index([userId])
+  @@index([isActive])
+}
+
+// ============================================================================
+// Project & Issue Models
+// ============================================================================
+
+model Project {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name                  String
+  slug                  String      @unique
+  description           String?
+  repositoryUrl         String?
+  
+  // GitHub or GitLab integration
+  providerType          String?     // "github", "gitlab", "bitbucket"
+  providerRepoId        String?     // External provider's repo ID
+  
+  // Governance settings
+  isPublic              Boolean     @default(false)
+  requiresCodeReview    Boolean     @default(true)
+  reviewers             String[]    // JSON array of reviewer emails
+  
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  
+  // Relations
+  issues                Issue[]
+  codeReviews           CodeReview[]
+  metrics               ProjectMetrics[]
+  
+  @@index([userId])
+  @@index([slug])
+  @@unique([userId, slug])
+}
+
+model Issue {
+  id                    String      @id @default(cuid())
+  projectId             String
+  project               Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  title                 String
+  description           String?
+  
+  // Issue Tracking
+  status                IssueStatus @default(OPEN)
+  severity              IssueSeverity @default(MEDIUM)
+  category              IssueCategory @default(BUG)
+  
+  // GitHub integration
+  externalId            String?     // GitHub Issue/PR ID
+  externalUrl           String?
+  
+  // AI Analysis
+  aiAnalysis            String?     // Summary of issue with recommendations
+  codeLocation          String?     // File:line references
+  affectedServices      String[]    // JSON array of service names
+  estimatedEffort       String?     // "Low", "Medium", "High"
+  
+  // Governance
+  hasSecurityConcern    Boolean     @default(false)
+  securityLevel         String?     // "Critical", "High", "Medium", "Low"
+  
+  assignedTo            String?     // User email
+  resolution            String?
+  
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  resolvedAt            DateTime?
+  
+  // Relations
+  codeReviews           CodeReview[]
+  comments              IssueComment[]
+  
+  @@index([projectId])
+  @@index([status])
+  @@index([severity])
+  @@index([hasSecurityConcern])
+  @@index([createdAt])
+}
+
+enum IssueStatus {
+  OPEN
+  IN_REVIEW
+  IN_PROGRESS
+  BLOCKED
+  RESOLVED
+  CLOSED
+  WONT_FIX
+}
+
+enum IssueSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IssueCategory {
+  BUG
+  FEATURE
+  TECHNICAL_DEBT
+  SECURITY
+  PERFORMANCE
+  DOCUMENTATION
+}
+
+model IssueComment {
+  id                    String      @id @default(cuid())
+  issueId               String
+  issue                 Issue       @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  
+  authorEmail           String
+  content               String
+  
+  // AI Generated?
+  isAiGenerated         Boolean     @default(false)
+  aiModel               String?
+  
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  
+  @@index([issueId])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// Code Review & Governance Models
+// ============================================================================
+
+model CodeReview {
+  id                    String      @id @default(cuid())
+  projectId             String
+  project               Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  issueId               String?
+  issue                 Issue?      @relation(fields: [issueId], references: [id], onDelete: SetNull)
+  
+  // Pull Request / Merge Request info
+  prNumber              Int
+  prTitle               String
+  prUrl                 String
+  
+  branch                String
+  baseBranch            String      @default("main")
+  
+  // Review Status
+  status                ReviewStatus @default(PENDING)
+  reviewerEmail         String
+  
+  // AI Analysis Results
+  findings              String?     // JSON with detailed findings
+  riskScore             Int?        // 0-100
+  performanceImpact     String?
+  securityConcerns      String[]    // JSON array
+  codeQualityScore      Int?        // 0-100
+  
+  approvedBy            String?
+  changesRequested      String?
+  
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  completedAt           DateTime?
+  
+  @@index([projectId])
+  @@index([status])
+  @@index([prNumber])
+  @@index([createdAt])
+}
+
+enum ReviewStatus {
+  PENDING
+  IN_PROGRESS
+  APPROVED
+  CHANGES_REQUESTED
+  REJECTED
+}
+
+model ProjectMetrics {
+  id                    String      @id @default(cuid())
+  projectId             String
+  project               Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  // Metrics snapshot
+  date                  DateTime    @default(now())
+  
+  totalIssues           Int         @default(0)
+  openIssues            Int         @default(0)
+  resolvedIssues        Int         @default(0)
+  criticalIssues        Int         @default(0)
+  
+  averageResolutionTime Int?        // in hours
+  codeQualityScore      Int?        // 0-100
+  securityScore         Int?        // 0-100
+  
+  pullRequestsCount     Int         @default(0)
+  averageReviewTime     Int?        // in hours
+  
+  @@index([projectId])
+  @@index([date])
+  @@unique([projectId, date])
+}
+
+// ============================================================================
+// Activity & Audit Logging
+// ============================================================================
+
+model Activity {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  action                String      // "issue_created", "review_approved", etc.
+  resource              String      // "issue", "review", "project"
+  resourceId            String
+  
+  details               String?     // JSON with additional context
+  ipAddress             String?
+  userAgent             String?
+  
+  createdAt             DateTime    @default(now())
+  
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// Lemon Squeezy Webhook Models
+// ============================================================================
+
+model LemonSqueezyEvent {
+  id                    String      @id @default(cuid())
+  eventId               String      @unique
+  eventName             String
+  
+  userId                String?
+  
+  payload               String      // JSON payload from webhook
+  
+  processedAt           DateTime?
+  isProcessed           Boolean     @default(false)
+  
+  createdAt             DateTime    @default(now())
+  
+  @@index([eventName])
+  @@index([isProcessed])
+  @@index([createdAt])
+}

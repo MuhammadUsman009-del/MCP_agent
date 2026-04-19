@@ -1,0 +1,48 @@
+# robots.txt - Agent-Ready SaaS Configuration
+# This file explicitly allows AI crawlers and agents to access the platform
+
+# GPT Bot (ChatGPT)
+User-agent: GPTBot
+Allow: /
+Disallow: /api/webhooks
+Disallow: /admin
+
+# ChatGPT User Agent
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /api/webhooks
+Disallow: /admin
+
+# OpenAI SearchBot
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /api/webhooks
+Disallow: /admin
+
+# Anthropic Claude
+User-agent: Claude-Web
+Allow: /
+Disallow: /api/webhooks
+Disallow: /admin
+
+# Google Bard
+User-agent: Bard
+Allow: /
+Disallow: /api/webhooks
+Disallow: /admin
+
+# All other agents
+User-agent: *
+Allow: /dashboard
+Allow: /api/ask
+Allow: /api/mcp
+Allow: /api/chat
+Disallow: /api/webhooks
+Disallow: /admin
+Disallow: /.well-known
+
+# Respect standard rate limiting
+Crawl-delay: 1
+
+# Sitemap
+Sitemap: /sitemap.xml
